@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { ConnectionStatus } from './ConnectionStatus';
+import { LoginForm } from './LoginForm';
 
 export interface Message {
   id: string;
@@ -13,11 +14,16 @@ export interface Message {
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error';
 
+interface User {
+  name: string;
+  password: string;
+}
+
 const Chat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
-  const [username, setUsername] = useState('');
-  const [isUsernameSet, setIsUsernameSet] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const reconnectAttemptsRef = useRef(0);
@@ -82,10 +88,10 @@ const Chat = () => {
   };
 
   const sendMessage = (content: string) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN && content.trim()) {
+    if (wsRef.current?.readyState === WebSocket.OPEN && content.trim() && user) {
       const message: Message = {
         id: Date.now().toString(),
-        username,
+        username: user.name,
         content: content.trim(),
         timestamp: new Date()
       };
@@ -94,11 +100,18 @@ const Chat = () => {
     }
   };
 
-  const handleUsernameSubmit = (name: string) => {
-    if (name.trim()) {
-      setUsername(name.trim());
-      setIsUsernameSet(true);
-      connectWebSocket();
+  const handleLogin = (userData: User) => {
+    setUser(userData);
+    setIsLoggedIn(true);
+    connectWebSocket();
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    setIsLoggedIn(false);
+    setMessages([]);
+    if (wsRef.current) {
+      wsRef.current.close();
     }
   };
 
@@ -113,69 +126,42 @@ const Chat = () => {
     };
   }, []);
 
-  if (!isUsernameSet) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Join Chat</h1>
-            <p className="text-gray-600">Enter your username to start chatting</p>
-          </div>
-          
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const input = e.currentTarget.username as HTMLInputElement;
-            handleUsernameSubmit(input.value);
-          }}>
-            <input
-              name="username"
-              type="text"
-              placeholder="Your username"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-              maxLength={30}
-              required
-            />
-            <button
-              type="submit"
-              className="w-full mt-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transform hover:scale-105 transition-all duration-200"
-            >
-              Start Chatting
-            </button>
-          </form>
-        </div>
-      </div>
-    );
+  if (!isLoggedIn) {
+    return <LoginForm onLogin={handleLogin} />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto p-4 h-screen flex flex-col">
-        <div className="bg-white rounded-t-2xl shadow-xl flex-1 flex flex-col overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
+      <div className="container mx-auto p-4 h-screen flex flex-col max-w-6xl">
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl flex-1 flex flex-col overflow-hidden border border-white/20">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-4 text-white rounded-t-2xl">
+          <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 p-6 text-white rounded-t-3xl">
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                  <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                   </svg>
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold">Real-time Chat</h1>
-                  <p className="text-white/80 text-sm">Welcome, {username}!</p>
+                  <h1 className="text-2xl font-bold">ChitChat</h1>
+                  <p className="text-white/90 text-sm">Welcome back, {user?.name}!</p>
                 </div>
               </div>
-              <ConnectionStatus connectionState={connectionState} />
+              <div className="flex items-center space-x-4">
+                <ConnectionStatus connectionState={connectionState} />
+                <button
+                  onClick={handleLogout}
+                  className="px-4 py-2 bg-white/20 rounded-xl hover:bg-white/30 transition-all duration-200 text-sm font-medium backdrop-blur-sm"
+                >
+                  Logout
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Messages */}
-          <MessageList messages={messages} currentUsername={username} />
+          <MessageList messages={messages} currentUsername={user?.name || ''} />
 
           {/* Input */}
           <MessageInput 
